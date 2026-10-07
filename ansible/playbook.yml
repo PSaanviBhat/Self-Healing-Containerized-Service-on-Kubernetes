@@ -1,0 +1,64 @@
+---
+- name: Kubernetes Node Prerequisite Configuration & Image Pre-pulling
+  hosts: k8s_nodes
+  become: yes
+  vars:
+    required_kernel_modules:
+      - overlay
+      - br_netfilter
+    app_image: "self-healing-k8s-service:latest"
+    sysctl_config:
+      net.bridge.bridge-nf-call-iptables: 1
+      net.bridge.bridge-nf-call-ip6tables: 1
+      net.ipv4.ip_forward: 1
+
+  tasks:
+    - name: Ensure required Linux kernel modules are loaded
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ required_kernel_modules }}"
+      ignore_errors: yes
+
+    - name: Persist kernel modules across reboots
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/k8s.conf
+        content: |
+          overlay
+          br_netfilter
+        mode: '0644'
+      ignore_errors: yes
+
+    - name: Apply sysctl network configuration for Kubernetes packet forwarding
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+        sysctl_file: /etc/sysctl.d/99-kubernetes-cri.conf
+      loop: "{{ sysctl_config | dict2items }}"
+      ignore_errors: yes
+
+    - name: Verify container runtime is installed (Docker or Containerd)
+      ansible.builtin.command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure Container Runtime service is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+      when: docker_check.rc == 0
+      ignore_errors: yes
+
+    - name: Pre-pull container images to prevent cold-start delays
+      ansible.builtin.command: "docker pull python:3.12-slim"
+      changed_when: true
+      when: docker_check.rc == 0
+      ignore_errors: yes
+
+    - name: Display completion summary
+      ansible.builtin.debug:
+        msg: "Kubernetes node prerequisites successfully configured."
