@@ -1,0 +1,22 @@
+# Multi-Stage Dockerfile for Go Health-Check CLI
+
+# Stage 1: Build static binary
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /src
+
+COPY cli/go.mod ./
+RUN go mod download
+
+COPY cli/ .
+
+# Compile static binary with optimizations and symbols stripped
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/pinger .
+
+# Stage 2: Distroless/Scratch minimal runtime
+FROM scratch
+
+COPY --from=builder /bin/pinger /bin/pinger
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+ENTRYPOINT ["/bin/pinger"]
