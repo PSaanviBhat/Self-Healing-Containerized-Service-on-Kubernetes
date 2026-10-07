@@ -14,43 +14,51 @@ An enterprise-ready, resilient microservice architecture designed for automated 
 ## Architecture Diagram
 
 ```mermaid
-flowchart TD
-    subgraph Client & Edge
-        Client["Client / API Traffic"]
-        GoCLI["Go Synthetic Pinger CLI"]
+flowchart LR
+    subgraph Traffic["Clients & Probes"]
+        direction TB
+        Client["Client Traffic<br/>(Batch Records)"]
+        GoCLI["Go Synthetic Pinger<br/>(Latency Tracing)"]
     end
 
-    subgraph Cluster ["Kubernetes Cluster (Kind / AWS EKS)"]
-        subgraph IngressLayer ["Ingress & Routing"]
-            Svc["Service: self-healing-service (NodePort 30080)"]
+    subgraph Cluster["Kubernetes Cluster"]
+        direction TB
+
+        subgraph Ingress["Ingress Layer"]
+            Svc["Service: self-healing-service<br/>NodePort :30080"]
         end
 
-        subgraph Workloads ["Namespace: self-healing-app"]
-            HPA["Horizontal Pod Autoscaler (HPA)"] -.->|Scales 2-8 Replicas| Deploy["Deployment: self-healing-service"]
-            Deploy --> Pod1["Pod 1 (FastAPI Non-Root UID 10001)"]
-            Deploy --> Pod2["Pod 2 (FastAPI Non-Root UID 10001)"]
+        subgraph AppNamespace["Namespace: self-healing-app"]
+            direction TB
+            Deploy["Deployment<br/>(FastAPI App)"]
+            HPA["Horizontal Pod Autoscaler<br/>(2 to 8 Replicas)"]
+            Pod1["Pod 1<br/>UID 10001 (Non-root)"]
+            Pod2["Pod 2<br/>UID 10001 (Non-root)"]
+
+            HPA -.->|Autoscales CPU > 60%| Deploy
+            Deploy --> Pod1
+            Deploy --> Pod2
         end
 
-        subgraph Probes ["K8s Control Plane Self-Healing"]
+        subgraph Healing["Fault Recovery"]
             Kubelet["Kubelet Node Controller"]
-            Kubelet -->|Liveness Probe /health| Pod1
-            Kubelet -->|Readiness Probe /ready| Pod1
-            Kubelet -->|Restarts Pod on Deadlock / Crash| Pod1
+            Kubelet -->|Liveness Probe :8000/health| Pod1
+            Kubelet -->|Readiness Probe :8000/ready| Pod1
+            Kubelet -.->|Restarts on Crash / Deadlock| Pod1
         end
 
-        subgraph Observability ["Namespace: monitoring"]
-            Prom["Prometheus Server (NodePort 30090)"]
-            Grafana["Grafana UI (NodePort 30030)"]
-            Prom -->|Scrapes :8000/metrics| Pod1
+        subgraph Monitoring["Namespace: monitoring"]
+            direction TB
+            Prom["Prometheus Server<br/>NodePort :30090"]
+            Grafana["Grafana UI<br/>NodePort :30030"]
             Prom -->|Scrapes :8000/metrics| Pod2
-            Grafana -->|Queries Golden Signals| Prom
+            Grafana -->|Golden Signals Dashboard| Prom
         end
     end
 
     Client -->|POST /process| Svc
-    GoCLI -->|GET /health with TCP/DNS trace| Svc
-    Svc --> Pod1
-    Svc --> Pod2
+    GoCLI -->|Health Checks| Svc
+    Svc --> Deploy
 ```
 
 ---
