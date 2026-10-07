@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-config
+  namespace: self-healing-app
+  labels:
+    app.kubernetes.io/name: self-healing-k8s-service
+data:
+  LOG_LEVEL: "INFO"
+  DOWNSTREAM_FAILURE_RATE: "0.0"
+  APP_ENV: "production"

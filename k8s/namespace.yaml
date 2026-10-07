@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: self-healing-app
+  labels:
+    app.kubernetes.io/name: self-healing-k8s-service
+    app.kubernetes.io/managed-by: manual
