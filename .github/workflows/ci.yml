@@ -30,6 +30,8 @@ jobs:
           pip install -r app/requirements.txt
 
       - name: Execute Python Unit Tests
+        env:
+          PYTHONPATH: .
         run: |
           pytest -v app/test_main.py
 
@@ -65,11 +67,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE_NAME_LOWER=${IMAGE_NAME,,}" >> $GITHUB_ENV
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}
           tags: |
             type=sha,format=long
             type=raw,value=latest
